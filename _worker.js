@@ -1,4 +1,4 @@
-const Version = '2026-08-10 03:09:01';
+const Version = '2026-09-04 16:24:13';
 let config_JSON, 缓存SOCKS5白名单 = null, 调试日志打印 = false;
 let SOCKS5白名单 = ['*tapecontent.net', '*cloudatacdn.com', '*loadshare.org', '*cdn-centaurus.com', 'scholar.google.com'];
 const Pages静态页面 = 'https://edt-pages.github.io';
@@ -68,19 +68,16 @@ export default {
 			const 反代上下文 = await 反代参数获取(url, userID, 默认反代IP, 默认反代兜底);
 			log(`[WebSocket] 命中请求: ${url.pathname}${url.search}`);
 			return await 处理WS请求(request, userID, url, 反代上下文);
-		} else if (管理员密码 && !访问路径.startsWith('admin/') && 访问路径 !== 'login' && request.method === 'POST') {// gRPC/XHTTP代理
+		} else if (管理员密码 && !访问路径.startsWith('admin/') && 访问路径 !== 'login' && request.method === 'POST') {// gRPC/叉HTTP代理
 			const 反代上下文 = await 反代参数获取(url, userID, 默认反代IP, 默认反代兜底);
-			const referer = request.headers.get('Referer') || '';
-			const { 头: 本机Padding头, 键: 本机Padding键 } = 获取XHTTPPadding标识(userID);
-			const 命中XHTTP特征 = referer.includes('x_padding', 14) || referer.includes('x_padding=')
-				|| !!request.headers.get(本机Padding头)
-				|| !!url.searchParams.get(本机Padding键);
-			if (!命中XHTTP特征 && contentType.startsWith('application/grpc')) {
+			const { 头: 本机Padding头, 键: 本机Padding键 } = 获取叉HTTPPadding标识(userID);
+			const 命中叉HTTP特征 = !!request.headers.get(本机Padding头) || !!url.searchParams.get(本机Padding键);
+			if (!命中叉HTTP特征 && contentType.startsWith('application/grpc')) {
 				log(`[gRPC] 命中请求: ${url.pathname}${url.search}`);
 				return await 处理gRPC请求(request, userID, 反代上下文);
 			}
-			log(`[XHTTP] 命中请求: ${url.pathname}${url.search}`);
-			return await 处理XHTTP请求(request, userID, 反代上下文);
+			log(`[叉HTTP] 命中请求: ${url.pathname}${url.search}`);
+			return await 处理叉HTTP请求(request, userID, 反代上下文);
 		} else {
 			if (url.protocol === 'http:') return Response.redirect(url.href.replace(`http://${url.hostname}`, `https://${url.hostname}`), 301);
 			if (!管理员密码) return fetch(Pages静态页面 + '/noADMIN').then(r => { const headers = new Headers(r.headers); headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); headers.set('Pragma', 'no-cache'); headers.set('Expires', '0'); return new Response(r.body, { status: 404, statusText: r.statusText, headers }) });
@@ -453,7 +450,7 @@ export default {
 									return `${协议类型}://${btoa(config_JSON.SS.加密方式 + ':00000000-0000-4000-8000-000000000000')}@${节点地址}:${节点端口}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.随机路径 ? 随机路径(完整节点路径) : 完整节点路径) + (config_JSON.SS.TLS ? ';tls' : '')) + ECHLINK参数 + TLS分片参数}#${encodeURIComponent(节点备注)}`;
 								} else {
 									const 传输路径参数值 = 获取传输路径参数值(config_JSON, 完整节点路径, 作为优选订阅生成器);
-									return `${协议类型}://00000000-0000-4000-8000-000000000000@${节点地址}:${节点端口}?security=tls&type=${传输协议 + ECHLINK参数}&${域名字段名}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${路径字段名}=${encodeURIComponent(传输路径参数值) + TLS分片参数}&encryption=none#${encodeURIComponent(节点备注)}`;
+									return `${协议类型}://00000000-0000-4000-8000-000000000000@${节点地址}:${节点端口}?security=tls&type=${传输协议 + ECHLINK参数}&${域名字段名}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${路径字段名}=${encodeURIComponent(传输路径参数值) + TLS分片参数}&encryption=none&alpn=${encodeURIComponent(config_JSON.ALPN)}#${encodeURIComponent(节点备注)}`;
 								}
 							}).filter(item => item !== null).join('\n');
 						} else { // 订阅转换
@@ -530,14 +527,7 @@ export default {
 		return new Response(await nginx(), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
 	}
 };
-///////////////////////////////////////////////////////////////////////XHTTP传输数据///////////////////////////////////////////////
-// ========== XHTTP obfs padding 支持 ==========
-// 链接生成处（获取传输协议配置）为 xhttp 节点注入：
-//   extra={"xPaddingObfsMode":true,"xPaddingMethod":"tokenish","xPaddingPlacement":"queryInHeader",
-//          "xPaddingHeader":"<UUID.slice(1,7)>","xPaddingKey":"_<UUID.slice(1,7)>"}
-// 客户端据此把 base62 padding 以「URL 形式放进 xPaddingHeader 头」或「放进 URL query」发送；
-// 服务端需提取并做 HPACK Huffman 字节长度校验（tokenish：100-2 <= len <= 1000+2），校验通过后 padding 直接丢弃。
-// 以下 HPACK Huffman 码长为 RFC 7541 Appendix B 的完整 257 项（含索引 256 的 EOS 符号），取自 golang.org/x/net/http2/hpack/tables.go，
+///////////////////////////////////////////////////////////////////////叉HTTP传输数据///////////////////////////////////////////////
 const HPACKHuffman码长 = [
 	13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28,
 	28, 28, 28, 28, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 28,
@@ -558,12 +548,10 @@ const HPACKHuffman码长 = [
 	30
 ];
 
-// 由 UUID 推导本机 XHTTP padding 头名/键名（与链接生成处 extra 的 xPaddingHeader / xPaddingKey 完全一致）
-function 获取XHTTPPadding标识(yourUUID) {
-	return { 头: yourUUID.slice(1, 7), 键: '_' + yourUUID.slice(1, 7) };
+function 获取叉HTTPPadding标识(yourUUID) {
+	return { 头: yourUUID.slice(1, 7), 键: '_' + yourUUID.slice(25, 31) };
 }
 
-// 计算字符串经 HPACK Huffman 编码后的字节长度（向上取整；与官方 hpack.HuffmanEncodeLength 等价，按 UTF-8 字节遍历）
 function 计算HPACKHuffman字节长度(字符串) {
 	const 字节 = new TextEncoder().encode(字符串);
 	let 总位数 = 0;
@@ -573,10 +561,7 @@ function 计算HPACKHuffman字节长度(字符串) {
 	return Math.ceil(总位数 / 8);
 }
 
-// 提取 XHTTP obfs padding 值（对应官方 ExtractXPaddingFromRequest，obfs 模式；本项目客户端使用 queryInHeader，不启用 cookie）
-// 优先级：① Header xPaddingHeader（值为 URL 形式时取其中 query 参数 xPaddingKey，取不到则回退用头值本身）② URL query 参数 xPaddingKey
-// 返回 '' 表示请求未携带 padding
-function 提取XHTTPPadding值(request, 本机Padding头, 本机Padding键) {
+function 提取叉HTTPPadding值(request, 本机Padding头, 本机Padding键) {
 	const 头值 = request.headers.get(本机Padding头);
 	if (头值) {
 		try {
@@ -590,35 +575,29 @@ function 提取XHTTPPadding值(request, 本机Padding头, 本机Padding键) {
 	return 请求URL.searchParams.get(本机Padding键) || '';
 }
 
-// 校验 XHTTP obfs padding（对应官方 IsPaddingValid，tokenish 方法）
-// @returns {boolean} true=校验通过或请求未携带 padding（放行）；false=携带 padding 但校验失败（应返回 400）
-function 校验XHTTPPadding(request, 本机Padding头, 本机Padding键) {
-	const padding值 = 提取XHTTPPadding值(request, 本机Padding头, 本机Padding键);
-	if (!padding值) return true; // 无 padding：兼容旧客户端/非 padding 请求，直接放行
+function 校验叉HTTPPadding(request, 本机Padding头, 本机Padding键) {
+	const padding值 = 提取叉HTTPPadding值(request, 本机Padding头, 本机Padding键);
+	if (!padding值) return true;
 	const huffman长度 = 计算HPACKHuffman字节长度(padding值);
-	// tokenish：huffman 编码字节长度须在 [100-2, 1000+2] 容差范围内
 	return huffman长度 >= 98 && huffman长度 <= 1002;
 }
 
-// 生成随机 base62 padding 串（用于响应端 padding，官方 GeneratePadding tokenish 的简化版；客户端不校验响应 padding）
-const XHTTPBase62字符集 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-function 生成XHTTPPadding串(长度) {
-	const 字符集长度 = XHTTPBase62字符集.length;
+const 叉HTTPBase62字符集 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+function 生成叉HTTPPadding串(长度) {
+	const 字符集长度 = 叉HTTPBase62字符集.length;
 	let 结果 = '';
 	for (let i = 0; i < 长度; i++) {
-		结果 += XHTTPBase62字符集[Math.floor(Math.random() * 字符集长度)];
+		结果 += 叉HTTPBase62字符集[Math.floor(Math.random() * 字符集长度)];
 	}
 	return 结果;
 }
 
-async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
+async function 处理叉HTTP请求(request, yourUUID, 反代上下文 = {}) {
 	if (!request.body) return new Response('Bad Request', { status: 400 });
-	// XHTTP obfs padding 提取与校验（官方 ExtractXPaddingFromRequest + IsPaddingValid）
-	// 校验通过或请求未携带 padding → 放行；携带 padding 但校验失败 → 400（padding 数据不解码、直接丢弃，不影响首包解析）
-	const { 头: 本机Padding头, 键: 本机Padding键 } = 获取XHTTPPadding标识(yourUUID);
-	if (!校验XHTTPPadding(request, 本机Padding头, 本机Padding键)) return new Response('Bad Request', { status: 400 });
+	const { 头: 本机Padding头, 键: 本机Padding键 } = 获取叉HTTPPadding标识(yourUUID);
+	if (!校验叉HTTPPadding(request, 本机Padding头, 本机Padding键)) return new Response('Bad Request', { status: 400 });
 	const reader = request.body.getReader();
-	const 首包 = await 读取XHTTP首包(reader, yourUUID);
+	const 首包 = await 读取叉HTTP首包(reader, yourUUID);
 	if (!首包) {
 		try { reader.releaseLock() } catch (e) { }
 		return new Response('Invalid request', { status: 400 });
@@ -644,18 +623,15 @@ async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
 		'X-Accel-Buffering': 'no',
 		'Cache-Control': 'no-store'
 	});
-	// 响应端 padding（官方 ApplyXPaddingToResponse 对应，obfs queryInHeader：头名=本机Padding头，值为含 query 的 URL 形式）
-	// 客户端不校验响应 padding，仅作响应特征混淆；随机长度 100~1000
+
 	try {
 		const 响应URL = new URL('https://x.invalid/');
-		响应URL.searchParams.set(本机Padding键, 生成XHTTPPadding串(100 + Math.floor(Math.random() * 901)));
+		响应URL.searchParams.set(本机Padding键, 生成叉HTTPPadding串(100 + Math.floor(Math.random() * 901)));
 		responseHeaders.set(本机Padding头, 响应URL.toString());
 	} catch (e) { }
 
-	// UDP 分支：拆到独立函数（保留原逻辑）
-	if (首包.isUDP) return 处理XHTTPUDP请求(首包, reader, request, 反代上下文, responseHeaders);
+	if (首包.isUDP) return 处理叉HTTPUDP请求(首包, reader, request, 反代上下文, responseHeaders);
 
-	// ================= TCP 分支：pipe 对接 =================
 	try { reader.releaseLock() } catch (e) { }
 
 	const remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null, downlinkDrain: Promise.resolve() };
@@ -665,18 +641,16 @@ async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
 		if (已清理) return;
 		已清理 = true;
 		try { abortController.abort(reason) } catch (e) { }
-		失效TCP连接世代(remoteConnWrapper); // 关闭 socket + 世代 +1
+		失效TCP连接世代(remoteConnWrapper);
 	};
 
-	// ⚠️ 关键：ws 参数必须传占位对象（新版 forwardataTCP 2370 行会访问 ws.readyState，传 null 会 TypeError 崩掉）
-	// closeSocketQuietly 对占位对象安全（无 close 方法 → TypeError 被内部 catch 吞掉）
 	const 占位WS = { readyState: WebSocket.OPEN };
 
 	let socket;
 	try {
 		socket = await forwardataTCP(首包.hostname, 首包.port, 首包.rawData, 占位WS, 首包.respHeader, remoteConnWrapper, yourUUID, request, 反代上下文, 首包.协议 === 'trojan', 首包.原始数据, true);
 	} catch (err) {
-		log(`[XHTTP-Pipe] 连接失败: ${err?.message || err}`);
+		log(`[叉HTTP-Pipe] 连接失败: ${err?.message || err}`);
 		清理(err);
 		return new Response('bad gateway', { status: 502 });
 	}
@@ -685,12 +659,32 @@ async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
 		return new Response('bad gateway', { status: 502 });
 	}
 
-	// 上行：请求体直接 pipe 进 socket（首包残余数据已由 forwardataTCP 写入）
 	const 上行Promise = (async () => {
-		await request.body.pipeTo(socket.writable, { signal: abortController.signal });
+		const 上行合包器 = 创建上行Grain合包流();
+		const 搬运Promise = 上行合包器.readable.pipeTo(socket.writable, { signal: abortController.signal });
+		void 搬运Promise.catch(清理);
+		const 上行reader = request.body.getReader();
+		const 取消上行reader = () => {
+			try { 上行reader.cancel(abortController.signal.reason).catch(() => { }); } catch (e) { }
+		};
+		abortController.signal.addEventListener('abort', 取消上行reader, { once: true });
+		try {
+			try {
+				while (true) {
+					const { done, value } = await 上行reader.read();
+					if (done) break;
+					if (value?.byteLength) await 上行合包器.写入(value);
+				}
+			} finally {
+				abortController.signal.removeEventListener('abort', 取消上行reader);
+				try { 上行reader.releaseLock() } catch (e) { }
+			}
+		} finally {
+			try { await 上行合包器.结束() } catch (e) { }
+		}
+		await 搬运Promise;
 	})();
 
-	// 下行：优先使用 IdentityTransformStream（若运行时不支持则回退到 TransformStream）
 	const 响应流 = typeof IdentityTransformStream !== 'undefined'
 		? new IdentityTransformStream()
 		: new TransformStream();
@@ -714,13 +708,13 @@ async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
 	return new Response(响应流.readable, { status: 200, headers: responseHeaders });
 }
 
-function 处理XHTTPUDP请求(首包, reader, request, 反代上下文, responseHeaders) {
+function 处理叉HTTPUDP请求(首包, reader, request, 反代上下文, responseHeaders) {
 	const 木马UDP上下文 = { 缓存: new Uint8Array(0), 反代地址: 反代上下文.木马反代地址 };
 	return new Response(new ReadableStream({
 		async start(controller) {
 			let 已关闭 = false;
 			let udpRespHeader = 首包.respHeader;
-			const xhttpBridge = {
+			const 叉桥 = {
 				readyState: WebSocket.OPEN,
 				send(data) {
 					if (已关闭) return;
@@ -750,32 +744,32 @@ function 处理XHTTPUDP请求(首包, reader, request, 反代上下文, response
 				if (首包.协议 === 'trojan') {
 					木马UDP上下文.目标主机 = 首包.hostname;
 					木马UDP上下文.目标端口 = 首包.port;
-					if (木马UDP上下文.反代地址) await 转发木马UDP数据(首包.原始数据, xhttpBridge, 木马UDP上下文, request);
+					if (木马UDP上下文.反代地址) await 转发木马UDP数据(首包.原始数据, 叉桥, 木马UDP上下文, request);
 				}
 				if (!(首包.协议 === 'trojan' && 木马UDP上下文.反代地址) && 首包.rawData?.byteLength) {
-					if (首包.协议 === 'trojan') await 转发木马UDP数据(首包.rawData, xhttpBridge, 木马UDP上下文, request);
-					else await forwardataudp(首包.rawData, xhttpBridge, udpRespHeader, request);
+					if (首包.协议 === 'trojan') await 转发木马UDP数据(首包.rawData, 叉桥, 木马UDP上下文, request);
+					else await forwardataudp(首包.rawData, 叉桥, udpRespHeader, request);
 					udpRespHeader = null;
 				}
 				while (true) {
 					const { done, value } = await reader.read();
 					if (done) break;
 					if (!value || value.byteLength === 0) continue;
-					if (首包.协议 === 'trojan') await 转发木马UDP数据(value, xhttpBridge, 木马UDP上下文, request);
-					else await forwardataudp(value, xhttpBridge, udpRespHeader, request);
+					if (首包.协议 === 'trojan') await 转发木马UDP数据(value, 叉桥, 木马UDP上下文, request);
+					else await forwardataudp(value, 叉桥, udpRespHeader, request);
 					udpRespHeader = null;
 				}
 			} catch (err) {
 				转发失败 = true;
-				log(`[XHTTP转发] 处理失败: ${err?.message || err}`);
-				closeSocketQuietly(xhttpBridge);
+				log(`[叉HTTP转发] 处理失败: ${err?.message || err}`);
+				closeSocketQuietly(叉桥);
 			} finally {
-			const 保持木马UDP反代下行 = !转发失败 && 首包.协议 === 'trojan' && 木马UDP上下文.反代地址 && 木马UDP上下文.反代Socket;
-			if (!保持木马UDP反代下行) {
-				try { 木马UDP上下文.反代Socket?.close() } catch (e) { }
-				closeSocketQuietly(xhttpBridge);
-			}
-			try { reader.releaseLock() } catch (e) { }
+				const 保持木马UDP反代下行 = !转发失败 && 首包.协议 === 'trojan' && 木马UDP上下文.反代地址 && 木马UDP上下文.反代Socket;
+				if (!保持木马UDP反代下行) {
+					try { 木马UDP上下文.反代Socket?.close() } catch (e) { }
+					closeSocketQuietly(叉桥);
+				}
+				try { reader.releaseLock() } catch (e) { }
 			}
 		},
 		cancel() {
@@ -821,8 +815,8 @@ function 开始TCP连接世代(remoteConnWrapper) {
 	return { generation, downlinkDrain };
 }
 
-async function 读取XHTTP首包(reader, token) {
-	const decoder = VLESS文本解码器;
+async function 读取叉HTTP首包(reader, token) {
+	const decoder = 魏烈思文本解码器;
 
 	const 尝试解析魏烈思首包 = (data) => {
 		const length = data.byteLength;
@@ -1340,7 +1334,7 @@ async function 处理WS请求(request, yourUUID, url, 反代上下文 = {}) {
 		while (WS本地测速请求缓存.byteLength) {
 			const headerEnd = 查找HTTP请求头结尾(WS本地测速请求缓存);
 			if (headerEnd === -1) return;
-			const headerText = VLESS文本解码器.decode(WS本地测速请求缓存.subarray(0, headerEnd));
+			const headerText = 魏烈思文本解码器.decode(WS本地测速请求缓存.subarray(0, headerEnd));
 			const contentLengthMatch = headerText.match(/(?:^|\r\n)content-length\s*:\s*(\d+)/i);
 			const contentLength = contentLengthMatch ? Number(contentLengthMatch[1]) : 0;
 			const requestLength = headerEnd + contentLength;
@@ -1928,7 +1922,7 @@ function 解析木马请求(buffer, passwordPlainText) {
 }
 
 const UUID字节缓存 = new Map();
-const VLESS文本解码器 = new TextDecoder();
+const 魏烈思文本解码器 = new TextDecoder();
 
 function 读取十六进制半字节(code) {
 	if (code >= 48 && code <= 57) return code - 48;
@@ -1997,7 +1991,7 @@ function 解析魏烈思请求(chunk, token) {
 			addrLen = data[addrValIdx];
 			addrValIdx += 1;
 			if (length < addrValIdx + addrLen) return { hasError: true, message: 'Invalid domain data' };
-			hostname = VLESS文本解码器.decode(data.subarray(addrValIdx, addrValIdx + addrLen));
+			hostname = 魏烈思文本解码器.decode(data.subarray(addrValIdx, addrValIdx + addrLen));
 			break;
 		case 3:
 			addrLen = 16;
@@ -2600,6 +2594,87 @@ function 创建Grain收纳器(容量, 复制合包结果 = false) {
 			压缩();
 			const bundled = output.subarray(0, totalBytes);
 			return { chunk: 复制合包结果 ? bundled.slice() : bundled, items };
+		}
+	};
+}
+
+function 创建上行Grain合包流(目标字节 = 上行合包目标字节) {
+	const identity = typeof IdentityTransformStream !== 'undefined'
+		? new IdentityTransformStream()
+		: new TransformStream();
+	const writer = identity.writable.getWriter();
+	const 缓冲 = new Uint8Array(目标字节);
+	let 缓冲长度 = 0;
+	let 定时器 = null;
+	let 在途写 = null;
+	let 冲刷链 = Promise.resolve();
+
+	const 清理定时器 = () => {
+		if (定时器) {
+			clearTimeout(定时器);
+			定时器 = null;
+		}
+	};
+
+	const 串行写 = async (chunk) => {
+		if (在途写) await 在途写;
+		在途写 = writer.write(chunk);
+		try { await 在途写 } finally { 在途写 = null; }
+	};
+
+	const 冲刷 = async () => {
+		if (缓冲长度) {
+			const chunk = 缓冲.slice(0, 缓冲长度);
+			缓冲长度 = 0;
+			await 串行写(chunk);
+		}
+	};
+
+	const 排队冲刷 = () => {
+		冲刷链 = 冲刷链.then(() => 冲刷()).catch(() => { });
+	};
+
+	const 启动定时器 = () => {
+		if (定时器) return;
+		定时器 = setTimeout(() => {
+			定时器 = null;
+			排队冲刷();
+		}, 1);
+	};
+
+	return {
+		readable: identity.readable,
+		写入: async (chunk) => {
+			const data = 数据转Uint8Array(chunk);
+			if (!data.byteLength) return;
+			if (data.byteLength >= 目标字节) {
+				清理定时器();
+				if (缓冲长度) await 冲刷();
+				await 串行写(data);
+				return;
+			}
+			if (缓冲长度 + data.byteLength >= 目标字节) {
+				const output = new Uint8Array(缓冲长度 + data.byteLength);
+				output.set(缓冲.subarray(0, 缓冲长度), 0);
+				output.set(data, 缓冲长度);
+				缓冲长度 = 0;
+				清理定时器();
+				await 串行写(output);
+			} else {
+				缓冲.set(data, 缓冲长度);
+				缓冲长度 += data.byteLength;
+				启动定时器();
+			}
+		},
+		结束: async () => {
+			清理定时器();
+			try {
+				await 冲刷链;
+				await 冲刷();
+				await writer.close();
+			} finally {
+				try { writer.releaseLock() } catch (e) { }
+			}
 		}
 	};
 }
@@ -3688,6 +3763,7 @@ class TlsClient {
 		/** @type {{ namedCurve: number, serverPublicKey: Uint8Array } | null} */
 		let serverKeyExchange = null;
 		let sawServerHelloDone = !1;
+		let clientCertRequested = !1;
 		if (await this.readHandshakeUntil(reader, (async message => {
 			switch (message.type) {
 				case HANDSHAKE_TYPE_CERTIFICATE: {
@@ -3703,7 +3779,8 @@ class TlsClient {
 				case HANDSHAKE_TYPE_SERVER_HELLO_DONE:
 					return this.recordHandshake(message.raw), sawServerHelloDone = !0, 1;
 				case HANDSHAKE_TYPE_CERTIFICATE_REQUEST:
-					throw new Error("Client certificate is not supported");
+					this.recordHandshake(message.raw), clientCertRequested = !0;
+					break;
 				default:
 					this.recordHandshake(message.raw)
 			}
@@ -3716,6 +3793,10 @@ class TlsClient {
 		if (!keyShare) throw new Error(`Missing key pair for curve: 0x${serverKeyExchangeData.namedCurve.toString(16)}`);
 		const preMasterSecret = await deriveSharedSecret(keyShare.keyPair.privateKey, serverKeyExchangeData.serverPublicKey, curveName),
 			clientKeyExchange = buildHandshakeMessage(HANDSHAKE_TYPE_CLIENT_KEY_EXCHANGE, tlsBytes(keyShare.publicKeyRaw.length, keyShare.publicKeyRaw));
+		if (clientCertRequested) {
+			const emptyCertificate = buildHandshakeMessage(HANDSHAKE_TYPE_CERTIFICATE, tlsBytes(0, 0, 0));
+			this.recordHandshake(emptyCertificate), await writer.write(buildTlsRecord(CONTENT_TYPE_HANDSHAKE, emptyCertificate))
+		}
 		this.recordHandshake(clientKeyExchange);
 		const hashName = this.cipherConfig.hash;
 		this.masterSecret = await tls12Prf(preMasterSecret, "master secret", concatBytes(this.clientRandom, this.serverRandom), 48, hashName);
@@ -3763,6 +3844,7 @@ class TlsClient {
 		if (!this.cipherConfig.chacha) [this.clientHandshakeCryptoKey, this.serverHandshakeCryptoKey] = await Promise.all([importAesGcmKey(this.clientHandshakeKey, ["encrypt"]), importAesGcmKey(this.serverHandshakeKey, ["decrypt"])]);
 		const serverFinishedKey = await hkdfExpandLabel(hashName, serverHandshakeTrafficSecret, "finished", EMPTY_BYTES, hashLen);
 		let serverFinishedReceived = !1;
+		let clientCertRequested = !1;
 		const handleHandshakeMessage = async message => {
 			switch (message.type) {
 				case HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS: {
@@ -3777,7 +3859,8 @@ class TlsClient {
 					break
 				}
 				case HANDSHAKE_TYPE_CERTIFICATE_REQUEST:
-					throw new Error("Client certificate is not supported");
+					this.recordHandshake(message.raw), clientCertRequested = !0;
+					break;
 				case HANDSHAKE_TYPE_CERTIFICATE_VERIFY:
 					this.recordHandshake(message.raw);
 					break;
@@ -3814,10 +3897,12 @@ class TlsClient {
 			serverAppTrafficSecret = await hkdfExpandLabel(hashName, masterSecret, "s ap traffic", applicationTranscriptHash, hashLen);
 		[this.clientAppKey, this.clientAppIv] = await deriveTrafficKeys(hashName, clientAppTrafficSecret, keyLen, ivLen), [this.serverAppKey, this.serverAppIv] = await deriveTrafficKeys(hashName, serverAppTrafficSecret, keyLen, ivLen);
 		if (!this.cipherConfig.chacha) [this.clientAppCryptoKey, this.serverAppCryptoKey] = await Promise.all([importAesGcmKey(this.clientAppKey, ["encrypt"]), importAesGcmKey(this.serverAppKey, ["decrypt"])]);
+		let clientFlightHandshake = EMPTY_BYTES;
+		if (clientCertRequested) clientFlightHandshake = buildHandshakeMessage(HANDSHAKE_TYPE_CERTIFICATE, tlsBytes(0, 0, 0, 0)), this.recordHandshake(clientFlightHandshake);
 		const clientFinishedKey = await hkdfExpandLabel(hashName, clientHandshakeTrafficSecret, "finished", EMPTY_BYTES, hashLen),
 			clientFinishedVerifyData = await hmac(hashName, clientFinishedKey, await digestBytes(hashName, this.transcript())),
 			clientFinishedMessage = buildHandshakeMessage(HANDSHAKE_TYPE_FINISHED, clientFinishedVerifyData);
-		this.recordHandshake(clientFinishedMessage), await writer.write(buildTlsRecord(CONTENT_TYPE_APPLICATION_DATA, await this.encryptTls13Handshake(concatBytes(clientFinishedMessage, [CONTENT_TYPE_HANDSHAKE])))), this.clientSeqNum = 0n, this.serverSeqNum = 0n
+		this.recordHandshake(clientFinishedMessage), await writer.write(buildTlsRecord(CONTENT_TYPE_APPLICATION_DATA, await this.encryptTls13Handshake(concatBytes(clientFlightHandshake, clientFinishedMessage, [CONTENT_TYPE_HANDSHAKE])))), this.clientSeqNum = 0n, this.serverSeqNum = 0n
 	}
 	async encryptTls12(plaintext, contentType) {
 		const sequenceNumber = this.clientSeqNum++,
@@ -4707,9 +4792,16 @@ function base64SecretDecode(encoded, secret) {
 
 function 获取传输协议配置(配置 = {}) {
 	const 是gRPC = 配置.传输协议 === 'grpc';
-	const { 头: 本机Padding头, 键: 本机Padding键 } = 获取XHTTPPadding标识(配置.UUID);
+	const { 头: 本机Padding头, 键: 本机Padding键 } = 获取叉HTTPPadding标识(配置.UUID);
+	const 叉混淆JSON = {
+		"xPaddingObfsMode": true,
+		"xPaddingMethod": "tokenish",
+		"xPaddingPlacement": "queryInHeader",
+		"xPaddingHeader": 本机Padding头,
+		"xPaddingKey": 本机Padding键
+	};
 	return {
-		type: 是gRPC ? (配置.gRPC模式 === 'multi' ? 'grpc&mode=multi' : 'grpc&mode=gun') : (配置.传输协议 === 'xhttp' ? `xhttp&mode=stream-one&extra=%7B%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingMethod%22%3A%22tokenish%22%2C%22xPaddingPlacement%22%3A%22queryInHeader%22%2C%22xPaddingHeader%22%3A%22${本机Padding头}%22%2C%22xPaddingKey%22%3A%22${本机Padding键}%22%7D` : 'ws'),
+		type: 是gRPC ? (配置.gRPC模式 === 'multi' ? 'grpc&mode=multi' : 'grpc&mode=gun') : (配置.传输协议 === 'xhttp' ? `xhttp&mode=stream-one&extra=${encodeURIComponent(JSON.stringify(叉混淆JSON))}` : 'ws'),
 		路径字段名: 是gRPC ? 'serviceName' : 'path',
 		域名字段名: 是gRPC ? 'authority' : 'host'
 	};
@@ -5510,6 +5602,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 		HOSTS: [hostname],
 		UUID: userID,
 		PATH: "/",
+		ALPN: "",
 		协议类型: "v" + "le" + "ss",
 		传输协议: "ws",
 		gRPC模式: "gun",
@@ -5633,6 +5726,7 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 
 	if (env.PATH) config_JSON.PATH = env.PATH.startsWith('/') ? env.PATH : '/' + env.PATH;
 	else if (!config_JSON.PATH) config_JSON.PATH = '/';
+	if (!config_JSON.ALPN) config_JSON.ALPN = "";
 
 	if (!config_JSON.gRPC模式) config_JSON.gRPC模式 = 'gun';
 	if (!config_JSON.SS) config_JSON.SS = { 加密方式: "aes-128-gcm", TLS: false };
